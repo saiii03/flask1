@@ -7,10 +7,16 @@
 </head>
 
 <body>
-    <div>Microblog : <a href="{{ url_for('login') }}">Home</a>
+    <div>
+        Microblog :
+         <a href="{{ url_for('index') }}">Home</a>
+         {% if current_user.is_anonymous %}
     <a href="{{ url_for('login') }}">login</a>
+    {% else %}
+    <a href="{{url_for('user',username=current_user.username)}}">profile</a>
+    <a href="{{ url_for('logout') }}"> logout</a>
     </div>
-    
+    {% endif %}
     <hr>
     {% with message= get_flashed_messages() %}
     {% if messages %}
