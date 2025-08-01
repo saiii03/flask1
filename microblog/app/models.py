@@ -8,6 +8,15 @@ from flask_login import UserMixin
 from app import login
 from hashlib import md5
 
+followers_table=sa.Table(
+    'followers',
+    db.metadata,
+    sa.Column('follower_id',sa.Integer,sa.ForeignKey('user.id'),
+              primary_key=True),
+    sa.Column('followed_id',sa.Integer,sa.ForeignKey('user.id'),
+              primary_key=True)
+)
+
 class User (UserMixin,db.Model):
     id: so.Mapped[int]=so.mapped_column(primary_key=True)
     username:so.Mapped[str]=so.mapped_column(sa.String(126),index=True,unique=True)
@@ -17,6 +26,47 @@ class User (UserMixin,db.Model):
     posts: so.WriteOnlyMapped['Post']=so.relationship(back_populates="author")
     about_me: so.Mapped[Optional[str]]=so.mapped_column(sa.String(146))
     last_seen:so.Mapped[Optional[datetime]]=so.mapped_column(default=lambda: datetime.now(timezone.utc))
+
+    followers: so.WriteOnlyMapped['User'] = so.relationship(
+        secondary=followers_table,
+        primaryjoin=(followers_table.c.followed_id == id),
+        secondaryjoin=(followers_table.c.follower_id == id),
+        back_populates='following',
+        lazy='dynamic'
+    )
+
+    # Define following relationship (users this user follows)
+    following: so.WriteOnlyMapped['User'] = so.relationship(
+        secondary=followers_table,
+        primaryjoin=(followers_table.c.follower_id == id),
+        secondaryjoin=(followers_table.c.followed_id == id),
+        back_populates='followers',
+        lazy='dynamic'
+    )
+
+    def follow(self,user):
+        if not self.is_following(user):
+            self.following.add(user)
+
+    def unfollow(self,user):
+        if self.is_following(user):
+            self.following.remove(user)
+
+    def is_following(self,user):
+        query=self.following.select().where(user.id==user.id)
+        return db.session.scalar(query) is not None
+    
+    def followers_count(self):
+        query=sa.select(sa.func.count()).select_from(
+            self.followers.select().subquery())
+        return db.session.scalar(query)
+    
+    def following_count(self):
+        query=sa.select(sa.func.count()).select_from(
+            self.following.select().subquery())
+        return db.session.scalar(query)
+
+
 
 
     def __repr__(self):
@@ -36,6 +86,8 @@ class User (UserMixin,db.Model):
 
     
 
+    
+
 class Post(db.Model):
     id:so.Mapped[int]=so.mapped_column(primary_key=True)
     body:so.Mapped[str]=so.mapped_column(sa.String(126))
@@ -50,3 +102,4 @@ class Post(db.Model):
 @login.user_loader
 def load_user(id):
     return db.session.get(User,int(id))
+
